@@ -6,6 +6,7 @@ struct node {
     float frequency;
     unsigned char symbol;
     char code[255];
+    int code_len;
     struct node *left;
     struct node *right;
 };
@@ -27,7 +28,7 @@ union code{
 
 struct node *gen_tree(struct node *symbols[], int len)
 {
-   struct node *temp;
+    struct node *temp;
     temp = (struct node*)malloc(sizeof(struct node));
 
     temp->frequency = symbols[len - 1]->frequency +
@@ -78,8 +79,6 @@ int huffman(char *filename){
         printf("error");
         return 0;
     }
-    struct node *dsymb_nodes = (struct node *) malloc(len * (sizeof(struct node))); //symbols
-    struct node **dpsymb_i = (struct node **) malloc(len * sizeof (struct node *)); //psum
 
     int c;  //chh
     int cnt_overall = 0;    //kk
@@ -154,18 +153,19 @@ int huffman(char *filename){
     mod = bin_size % 8;
 
 
-    fprintf(fcomp, "%d %d ", cnt_uniq_symb, mod);
+    fprintf(fcomp, "%d %d %d ", cnt_uniq_symb, bin_size, mod);
     for(int i = 0; i < cnt_uniq_symb; i++){
         fprintf(fcomp, "%c %s ", symb_nodes[i].symbol, symb_nodes[i].code);
-        printf("ch: %c, code: %s\n", symb_nodes[i].symbol, symb_nodes[i].code);
+        printf("%c %s\n", symb_nodes[i].symbol, symb_nodes[i].code);
     }
     fprintf(fcomp, "\n");
     rewind(fbin);
 
-    int b[8];
+    int b[9];
     union code code;
     int cnt = 0;
     printf("mod: %d\n", mod);
+    printf("=========\n");
     for (int i = 0; i < bin_size - mod; i++){
         b[cnt] = fgetc(fbin);
         if (cnt == 7){
@@ -178,10 +178,14 @@ int huffman(char *filename){
             code.bin.b6 = b[6] - '0';
             code.bin.b7 = b[7] - '0';
             fputc(code.ch, fcomp);
-            printf("%d %d %d %d %d %d %d %d, %d\n", code.bin.b0, code.bin.b1, code.bin.b2, code.bin.b3, code.bin.b4, code.bin.b5, code.bin.b6, code.bin.b7, code.ch);
+            //printf("c: %x\n", code.ch);
+            //printf("%d  %d  %d  %d  %d  %d  %d  %d\n", code.bin.b0, code.bin.b1, code.bin.b2, code.bin.b3, code.bin.b4, code.bin.b5, code.bin.b6, code.bin.b7, code.ch);
+            //printf("%d %d %d %d %d %d %d %d\n", b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]);
             cnt = 0;
+            continue;
         }
         cnt++;
+
     }
 
 
@@ -204,7 +208,7 @@ int huffman(char *filename){
             code.bin.b6 = b[6] - '0';
             code.bin.b7 = b[7] - '0';
             fputc(code.ch, fcomp);
-            printf("MOD: %d %d %d %d %d %d %d %d, %d\n", code.bin.b0, code.bin.b1, code.bin.b2, code.bin.b3, code.bin.b4, code.bin.b5, code.bin.b6, code.bin.b7, code.ch);
+            //printf("MOD: %d%d%d%d%d%d%d%d, %d\n", code.bin.b0, code.bin.b1, code.bin.b2, code.bin.b3, code.bin.b4, code.bin.b5, code.bin.b6, code.bin.b7, code.ch);
         }
         cnt++;
     }
@@ -213,6 +217,161 @@ int huffman(char *filename){
     return 0;
 }
 
+int huffman_decode(char *filename){
+    FILE *f;
+    f = fopen(filename, "rb");
+    int mod;
+    int bin_size;
+    int n_uniq_symb;
+    fscanf(f, "%d %d %d", &n_uniq_symb, &bin_size, &mod);
+    printf("uniq: %d, mod: %d\n", n_uniq_symb, mod);
+
+    struct node nodes[256];
+    char s[500];
+    fseek(f, -2, SEEK_CUR);
+    int cnt = 0;
+    char *code = {0};
+    //rewind(f);
+    for(int i = 0; i < n_uniq_symb + 1; i++){
+        char c = fgetc(f);
+        nodes[i].symbol = c;
+        c = fgetc(f);
+        int code_cnt = 0;
+        while((c = fgetc(f)) != ' '){
+            nodes[i].code[code_cnt] = c;
+            code_cnt++;
+        }
+        nodes[i].code[code_cnt] = '\0';
+        nodes[i].code_len = code_cnt;
+
+    }
+    for (int i = 0; i < n_uniq_symb; i++) nodes[i] = nodes[i + 1];
+
+    struct node root;
+    root.left = NULL;
+    root.right = NULL;
+
+    struct node *curr = (struct node *) malloc(sizeof (struct node));
+    curr = &root;
+    for (int i = 0; i < n_uniq_symb; i++){
+        for (int j = 0; j < nodes[i].code_len; j++){
+
+            if(nodes[i].code[j] == '0') {
+                //printf("%c", nodes[i].code[j]);
+                if (curr->left == NULL) {
+                    struct node *new = (struct node *) malloc(sizeof (struct node));
+                    new->right = NULL;
+                    new->left = NULL;
+
+                    curr->left = new;
+                    curr = new;
+                }
+                else{
+                    curr = curr->left;
+                }
+                continue;
+            }
+            if(nodes[i].code[j] == '1') {
+                //printf("%c", nodes[i].code[j]);
+                if (curr->right == NULL) {
+                    struct node *new = (struct node *) malloc(sizeof (struct node));
+                    new->right = NULL;
+                    new->left = NULL;
+                    curr->right = new;
+                    curr = new;
+                }
+                else{
+                    curr = curr->right;
+                }
+            }
+            continue;
+        }
+        //printf("\n");
+        curr->symbol = nodes[i].symbol;
+        curr = &root;
+    }
+
+    for (int i = 0; i < n_uniq_symb; i++){
+        printf("%c %s %d\n", nodes[i].symbol, nodes[i].code, nodes[i].code_len);
+    }
+    printf("===========\n");
+    char c;
+    union code code_bin;
+
+    FILE *f2, *fout;
+    c = fgetc(f);
+
+    f2 = fopen("temp2.txt", "wb");
+
+    cnt = 0;
+    for (int i = 0; i < bin_size; i+=8){
+        code_bin.ch = fgetc(f);
+        //printf("c2: %x\n", code_bin.ch);
+        if (cnt < bin_size){
+            fprintf(f2, "%d", code_bin.bin.b0);
+            cnt++;
+        }
+        if (cnt < bin_size){
+            fprintf(f2, "%d", code_bin.bin.b1);
+            cnt++;
+        }
+        if (cnt < bin_size){
+            fprintf(f2, "%d", code_bin.bin.b2);
+            cnt++;
+        }
+        if (cnt < bin_size){
+            fprintf(f2, "%d", code_bin.bin.b3);
+            cnt++;
+        }
+        if (cnt < bin_size){
+            fprintf(f2, "%d", code_bin.bin.b4);
+            cnt++;
+        }
+        if (cnt < bin_size){
+            fprintf(f2, "%d", code_bin.bin.b5);
+            cnt++;
+        }
+        if (cnt < bin_size){
+            fprintf(f2, "%d", code_bin.bin.b6);
+            cnt++;
+        }
+        if (cnt < bin_size){
+            fprintf(f2, "%d", code_bin.bin.b7);
+            cnt++;
+        }
+        //printf("%d%d%d%d%d%d%d%d\n", code_bin.bin.b0, code_bin.bin.b1, code_bin.bin.b2, code_bin.bin.b3, code_bin.bin.b4, code_bin.bin.b5, code_bin.bin.b6, code_bin.bin.b7);
+    }
+
+    fclose(f2);
+    f2 = fopen("temp2.txt", "rb");
+    fout = fopen("out.txt", "wb");
+    curr = &root;
+    while ((c = fgetc(f2)) != EOF){
+        if(c == '0'){
+            if(curr->left != NULL){
+                curr = curr->left;
+            }
+            else {
+                fprintf(fout, "%c", curr->symbol);
+                curr = &root;
+                fseek(f2, -1, SEEK_CUR);
+            }
+        }
+        if(c == '1'){
+            if(curr->right != NULL){
+                curr = curr->right;
+            }
+            else {
+                fprintf(fout, "%c", curr->symbol);
+                curr = &root;
+                fseek(f2, -1, SEEK_CUR);
+            }
+        }
+    }
+    fprintf(fout, "%c", curr->symbol);
+
+
+}
 int extract(char* archive_name){
     FILE* archive_file = fopen(archive_name, "rb");
     int cnt_archive = 0;
@@ -302,5 +461,6 @@ int main(int argc, char* argv[]){
         if(!strcmp("--list", argv[i])) list(archive_name);
     }*/
     int a = huffman("file2.txt");
+    a = huffman_decode("fcomp.txt");
     return 0;
 }
