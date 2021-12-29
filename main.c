@@ -68,25 +68,25 @@ void gen_code(struct node *root){
     }
 }
 
-int huffman(char *filename){
+int huffman(char *filename, char *outname){
     FILE *f, *fbin, *fcomp;
+    printf("HUFFMAN %s->%s\n", filename, outname);
 
     f = fopen(filename, "rb");
-
     int len = 0;
 
     if (f == NULL){
         printf("error");
         return 0;
     }
+    rewind(f);
+    int c;
+    int cnt_overall = 0;
+    int cnt_uniq_symb = 0;
 
-    int c;  //chh
-    int cnt_overall = 0;    //kk
-    int cnt_uniq_symb = 0;  //k
-
-    int symb_num[256] = {0};    //kolvo
-    struct node symb_nodes[256] = {0};  //simbols
-    struct node *psymb[256];    //psim
+    int symb_num[256] = {0};
+    struct node symb_nodes[256] = {0};
+    struct node *psymb[256];
 
     while((c = fgetc(f)) != EOF){
         for (int i = 0; i < 256; i++){
@@ -147,7 +147,7 @@ int huffman(char *filename){
     int mod = 0;
     fclose(fbin);
     fbin = fopen("temp.txt", "rb");
-    fcomp = fopen("fcomp.txt", "wb");
+    fcomp = fopen(outname, "wb");
     while((c = fgetc(fbin)) != EOF) bin_size++;
 
     mod = bin_size % 8;
@@ -213,11 +213,11 @@ int huffman(char *filename){
         cnt++;
     }
     fcloseall();
-    //remove("temp.txt");
+    remove("temp.txt");
     return 0;
 }
 
-int huffman_decode(char *filename){
+int huffman_decode(char *filename, char *outname){
     FILE *f;
     f = fopen(filename, "rb");
     int mod;
@@ -344,7 +344,7 @@ int huffman_decode(char *filename){
 
     fclose(f2);
     f2 = fopen("temp2.txt", "rb");
-    fout = fopen("out.txt", "wb");
+    fout = fopen(outname, "wb");
     curr = &root;
     while ((c = fgetc(f2)) != EOF){
         if(c == '0'){
@@ -369,6 +369,8 @@ int huffman_decode(char *filename){
         }
     }
     fprintf(fout, "%c", curr->symbol);
+    fcloseall();
+    remove("temp2.txt");
 
 
 }
@@ -388,7 +390,7 @@ int extract(char* archive_name){
     int size;
     FILE *file;
 
-    while (fscanf(archive_file, "%s %d", filename, &size) != 0) {
+    while (fscanf(archive_file, "[%s %d]", filename, &size) != 0) {
         file = fopen(filename, "wb");
         cnt_header = ftell(archive_file);
         fseek(archive_file, cnt_archive, SEEK_SET);
@@ -400,6 +402,7 @@ int extract(char* archive_name){
         fclose(file);
         printf("%s extracted\n", filename);
     }
+    fcloseall();
     return 0;
 }
 
@@ -407,7 +410,7 @@ int list(char* archive_name){
     FILE* archive_file = fopen(archive_name, "rb");
     char filename[128] = {0};
     int  filesize;
-    while (fscanf(archive_file, "[%s : %d]", filename, &filesize) != 0) {
+    while (fscanf(archive_file, "[%s %d]", filename, &filesize) != 0) {
         printf("%s\n", filename);
     }
     fclose(archive_file);
@@ -426,7 +429,7 @@ int create(char* archive_name, int argc, char* argv[]){
         fseek(file, 0, SEEK_END);
         size = ftell(file);
         fclose(file);
-        fprintf(archive_file, "[%s : %d]", argv[i + 4], size);
+        fprintf(archive_file, "[%s %d]", argv[i + 4], size);
         fclose(file);
     }
     fprintf(archive_file, "\n");
@@ -446,21 +449,30 @@ int create(char* archive_name, int argc, char* argv[]){
         printf("%s was added to %s\n", argv[i], archive_name);
     }
     printf("\nSucsessfully archived: %d out of %d files.\n", argc - 4 - error_cnt, argc - 4);
+    fcloseall();
     return 0;
 }
 
 int main(int argc, char* argv[]){
     char* archive_name;
-    /*for (int i = 0; i < argc; i++){
+    for (int i = 0; i < argc; i++){
         if(!strcmp("--file", argv[i])) archive_name = argv[i + 1];
 
-        if(!strcmp("--create", argv[i])) create(archive_name, argc, argv);
+        if(!strcmp("--create", argv[i])) {
+            create("arch.txt", argc, argv);
+            huffman("arch.txt", archive_name);
+            //remove("arch.txt");
+        }
 
-        if(!strcmp("--extract", argv[i])) extract(archive_name);
+        if(!strcmp("--extract", argv[i])){
+            huffman_decode(archive_name, "arch.txt");
+            extract("arch.txt");
+            //remove("arch.txt");
+        }
 
         if(!strcmp("--list", argv[i])) list(archive_name);
-    }*/
-    int a = huffman("file2.txt");
-    a = huffman_decode("fcomp.txt");
+    }
+    //int a = huffman("file2.txt", "fcomp.txt");
+    //a = huffman_decode("fcomp.txt", "out.txt");
     return 0;
 }
